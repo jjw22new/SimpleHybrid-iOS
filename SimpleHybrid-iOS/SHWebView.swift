@@ -14,30 +14,48 @@ import WebKit
     let config = WKWebViewConfiguration()
     
     required public init?(coder: NSCoder) {
-        super.init(coder: <#T##NSCoder#>)
+        super.init(coder: coder)
         
         self.navigationDelegate = self
+        self.customUserAgent = self.customUserAgent! + "SimpleHybrid;"
     }
     
-    private func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        var action: WKNavigationActionPolicy?
-        
-        defer {
-            decisionHandler(action ?? .allow)
+    // JS -> Native CALL
+    @available(iOS 8.0, *)
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        switch message.name {
+        case "appDataToWeb":
+            let appData = UserDefaults.standard.dictionary(forKey: "appData")!
+            let appDataString = appData.convertToString()
+            self.evaluateJavaScript("shInitCallBack('" + appDataString! + "')", completionHandler: nil)
+        case "appDataToApp":
+            UserDefaults.standard.set(message.body, forKey: "appData")
+        default:
+            print("userContentController message not matched")
         }
-        
-        guard let url = navigationAction.request.url else { return }
-        
-        print(url)
-        
-        if (navigationAction.navigationType == .linkActivated && url.absoluteString.hasPrefix("SH://")) {
-            action = .cancel // Stop in WebView
-            
-            if(url.absoluteString.hasPrefix("SH://data.view")) {
-                let queryItems = URLComponents(string: url.absoluteString)?.queryItems
-                let param1 = queryItems?.filter({$0.name == "name"}).first
-                print(param1?.value ?? "")
+    }
+}
+
+extension String {
+    func convertToDictionary() -> [String: Any]? {
+        if let data = self.data(using: .utf8) {
+            do {
+                return try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+            } catch {
+                print(error.localizedDescription)
             }
         }
+        return nil
+    }
+}
+
+extension Dictionary {
+    func convertToString() -> String? {
+        do {
+            return try JSONSerialization.data(withJSONObject: self, options: .prettyPrinted) as? String
+        } catch {
+            print(error.localizedDescription)
+        }
+        return nil
     }
 }
